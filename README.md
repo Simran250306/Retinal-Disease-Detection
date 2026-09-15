@@ -1,108 +1,100 @@
 # Retinal Disease Detection
 
-This project is a Streamlit app that analyzes fundus images of the eye and predicts the most likely retinal condition from a trained machine-learning model.
+A machine-learning project that classifies retinal fundus images into one of eight eye-health categories. The core inference pipeline uses a CatBoost multiclass classifier with PCA-reduced grayscale image features, served through an interactive Streamlit interface.
 
-In simple terms: you upload an eye image, the app preprocesses it to match the model it finds, and then it shows the prediction plus the probability for every class.
+> **Medical disclaimer:** This is an educational screening prototype, not a clinical diagnostic device. Do not use its predictions as medical advice or for treatment decisions.
 
-## What the app does
+## What it does
 
-- Accepts a fundus image uploaded by the user.
-- Runs the image through a trained retinal-disease model.
-- Displays the most likely diagnosis.
-- Shows class-wise probabilities so the result is easier to interpret.
-- Supports both single-label and multi-label style outputs, depending on the model.
+- Upload a JPG or PNG fundus image.
+- Preprocess the image to match the trained CatBoost model.
+- Show the highest-probability class and confidence score.
+- Display probabilities for every supported class.
+- Provide optional debug information for troubleshooting preprocessing and model assets.
 
-## Supported model types
+## Supported classes
 
-The app automatically chooses the first model it finds in this order:
+The included model uses the following class order:
 
-1. `bestmodel.cbm`
-2. `retinal_model.cbm`
-3. `retinal_model.h5`
+| Label | Description |
+| --- | --- |
+| `normal` | Normal |
+| `hypertension` | Hypertensive retinal finding |
+| `cataract` | Cataract |
+| `others` | Other retinal finding |
+| `glaucoma` | Glaucoma |
+| `myopia` | Myopia |
+| `ageDegeneration` | Age-related macular degeneration |
+| `diabetes` | Diabetic retinal finding |
 
-### CatBoost model
+## Inference pipeline
 
-- Uses a grayscale `64x64` image.
-- Flattens the image before prediction.
-- Optionally applies PCA if `catboost_pca.pkl` is available.
-- Uses stored class names from:
-  - `catboost_class_names.pkl`
-  - `catboost_clas_names.pkl`
+```text
+Fundus image
+    -> RGB to grayscale conversion
+    -> resize to 64 × 64 pixels
+    -> flatten into 4,096 features
+    -> PCA transformation (95% explained-variance target)
+    -> CatBoost multiclass prediction
+    -> class probabilities
+```
 
-### Pipeline model
+The preprocessing and PCA artifact must come from the same training run as the CatBoost model.
 
-This project also supports a pipeline-style CatBoost workflow:
+## Repository structure
 
-- image preprocessing happens first,
-- optional PCA is applied next,
-- CatBoost makes the final prediction.
+```text
+.
+├── app.py                     # Streamlit prediction interface
+├── bestmodel.cbm              # Trained CatBoost model (local, git-ignored)
+├── catboost_pca.pkl           # Fitted PCA transformer
+├── catboost_class_names.pkl   # Ordered class names
+├── DL_miniproject.ipynb       # Dataset preparation, training, and evaluation
+├── datasets/                  # Local class-folder image dataset (git-ignored)
+├── frontend/                  # Separate React/Vite UI prototype
+└── requirements.txt           # Python dependencies
+```
 
-In other words, the "pipeline model" is the CatBoost model plus its preprocessing steps bundled together at inference time.
+## Run locally
 
-### Keras model
+### Prerequisites
 
-- Resizes the image to `300x300`.
-- Normalizes the image before prediction unless the model already contains internal preprocessing.
-- Uses class names from `class_names.pkl`.
+- Python 3.10 or a compatible TensorFlow-supported Python version
+- `bestmodel.cbm`, `catboost_pca.pkl`, and `catboost_class_names.pkl` in the project root
 
-## How prediction works
-
-1. The user uploads a retina image in the app.
-2. The app converts the image into the format expected by the selected model.
-3. The model returns class probabilities.
-4. The app either:
-   - shows the top class for softmax-style outputs, or
-   - lists every class above the confidence threshold for multi-label outputs.
-
-## Project files
-
-- `app.py` - Streamlit application and prediction logic.
-- `bestmodel.cbm` - primary CatBoost model, if present.
-- `retinal_model.cbm` - alternate CatBoost model, if present.
-- `retinal_model.h5` - alternate Keras model, if present.
-- `catboost_pca.pkl` - optional PCA object used with the CatBoost pipeline.
-- `catboost_class_names.pkl` / `catboost_clas_names.pkl` - CatBoost class labels.
-- `class_names.pkl` - class labels for the Keras model.
-- `requirements.txt` - Python dependencies.
-
-## Setup
-
-### 1) Install dependencies
+### Installation
 
 ```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
-### 2) Run the app
+### Start the app
 
 ```powershell
 streamlit run app.py
 ```
 
-## What the user sees
+Open the local URL printed in the terminal, upload a fundus image, and select **Predict**.
 
-When the app runs, the interface lets the user:
+## Training workflow
 
-- upload a fundus image,
-- preview the uploaded image,
-- click Predict,
-- view the predicted disease class,
-- inspect all class probabilities,
-- optionally open debug information.
+`DL_miniproject.ipynb` records the CatBoost baseline workflow:
 
-## Notes
+1. Downloads the `tanjemahamed/odir5k-classification` dataset from Kaggle.
+2. Creates an 80/20 stratified train-test split.
+3. Converts images to grayscale `64 × 64` arrays.
+4. Uses PCA to retain 95% of explained variance.
+5. Trains a CatBoost multiclass classifier for 1,000 iterations.
+6. Saves the trained model as `bestmodel.cbm`.
 
-- This project is meant for screening and demonstration, not as a replacement for a medical diagnosis.
-- The prediction quality depends on the model file and class-label files available in the project root.
-- If `catboost` or `scikit-learn` is missing, install the dependencies listed in `requirements.txt`.
+The notebook’s saved run reports 12,784 images across eight classes, 88.11% test accuracy, and a weighted F1 score of 0.8817. These are historical experiment outputs—not clinical-validation results—and may vary by dataset version, environment, and training run. Because the data is class-imbalanced, evaluate per-class precision, recall, F1 scores, and the confusion matrix in addition to overall accuracy.
 
-## About the code
+## Frontend note
 
-The app is built around `app.py`, which handles:
+`frontend/` is a separate React/Vite prototype that expects a `POST /predict` API endpoint. That FastAPI endpoint is not included in this repository; use the Streamlit application for the working local interface.
 
-- model loading,
-- image preprocessing,
-- prediction,
-- Streamlit UI rendering.
+## Responsible use
 
-If you want, I can also add a screenshot section or a short "How it works" diagram to make the README even easier to understand.
+Before any clinical use, a medical-image model would require independent external validation, calibration, fairness and bias analysis, privacy safeguards, and applicable regulatory review.
